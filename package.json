@@ -1,0 +1,11 @@
+{
+  "name": "lao-auto-saas",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install --prefix apps/api && npm install --prefix apps/web",
+    "start:api": "npm run start:dev --prefix apps/api",
+    "start:web": "npm run start --prefix apps/web",
+    "build": "npm run build --prefix apps/api && npm run build --prefix apps/web",
+    "lint": "npm run lint --prefix apps/api && npm run lint --prefix apps/web"
+  }
+}
