@@ -1,33 +1,56 @@
-import { Component } from '@angular/core';
-import { RouterLink, RouterOutlet } from '@angular/router';
+import { Component, signal } from '@angular/core';
+import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import { AnalyticsService } from './core/analytics.service';
 
 @Component({
   selector: 'lao-root',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, LucideAngularModule],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, LucideAngularModule],
   template: `
-    <header class="sticky top-0 z-40 border-b border-black/10 bg-white/95 backdrop-blur">
-      <nav class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
-        <a routerLink="/" class="text-xl font-black tracking-tight text-forest">Lao Auto</a>
-        <div class="hidden items-center gap-6 text-sm font-semibold md:flex">
-          <a routerLink="/cars" class="hover:text-forest">Cars</a>
-          <a routerLink="/dashboard" class="hover:text-forest">Dealer</a>
-          <a routerLink="/admin" class="hover:text-forest">Admin</a>
+    <header class="la-header">
+      <div class="la-container">
+        <div class="la-header-inner">
+          <a routerLink="/" class="la-logo" aria-label="LAOS AUTO home">
+            <div class="la-logo-icon">LA</div>
+            <div>LAOS <span>AUTO</span></div>
+          </a>
+
+          <nav class="la-nav">
+            <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">{{ lang() === 'lo' ? 'ໜ້າຫຼັກ' : 'Home' }}</a>
+            <a routerLink="/cars" routerLinkActive="active">{{ lang() === 'lo' ? 'ລົດທັງໝົດ' : 'All Cars' }}</a>
+            <a routerLink="/contact" routerLinkActive="active">{{ lang() === 'lo' ? 'ຕິດຕໍ່' : 'Contact' }}</a>
+            <a routerLink="/dashboard" routerLinkActive="active">Dealer</a>
+          </nav>
+
+          <div class="flex items-center gap-3">
+            <div class="la-lang-toggle">
+              <button type="button" [class.active]="lang() === 'lo'" (click)="setLang('lo')">ລາວ</button>
+              <button type="button" [class.active]="lang() === 'en'" (click)="setLang('en')">EN</button>
+            </div>
+            <a routerLink="/cars" class="rounded-full bg-white/10 p-2 text-white md:hidden" aria-label="Search cars">
+              <i-lucide name="search" class="h-5 w-5" />
+            </a>
+          </div>
         </div>
-        <div class="flex items-center gap-2">
-          <a routerLink="/cars" class="focus-ring rounded-md p-2 hover:bg-forest/10" aria-label="Search cars"><i-lucide name="search" class="h-5 w-5" /></a>
-          <a routerLink="/dashboard" class="focus-ring rounded-md p-2 hover:bg-forest/10" aria-label="Dashboard"><i-lucide name="user-round" class="h-5 w-5" /></a>
-          <button class="focus-ring rounded-md p-2 md:hidden" aria-label="Menu"><i-lucide name="menu" class="h-5 w-5" /></button>
-        </div>
-      </nav>
+      </div>
     </header>
+
     <router-outlet />
   `
 })
 export class AppComponent {
+  lang = signal(localStorage.getItem('laosAutoLang') || 'lo');
+
   constructor(analytics: AnalyticsService) {
     analytics.init();
+    document.body.classList.toggle('lang-en', this.lang() === 'en');
+  }
+
+  setLang(lang: 'lo' | 'en') {
+    this.lang.set(lang);
+    localStorage.setItem('laosAutoLang', lang);
+    document.body.classList.toggle('lang-en', lang === 'en');
   }
 }
+

@@ -1,79 +1,137 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, signal } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { LucideAngularModule } from 'lucide-angular';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { catchError, of } from 'rxjs';
 import { ApiService } from '../../core/api.service';
 import { Car } from '../../core/models';
+import { publicDemoCars } from '../../core/public-cars';
 import { LakCurrencyPipe } from '../../shared/currency.pipe';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, LakCurrencyPipe, LucideAngularModule],
+  imports: [CommonModule, FormsModule, RouterLink, LakCurrencyPipe],
   template: `
     @if (car(); as item) {
-      <main class="mx-auto grid max-w-7xl gap-8 px-4 py-6 lg:grid-cols-[1fr_380px]">
-        <section>
-          <div class="overflow-hidden rounded-lg bg-white">
-            <img [src]="heroImage(item)" [alt]="item.make + ' ' + item.model" class="aspect-[16/10] w-full object-cover" loading="eager">
-          </div>
-          <div class="mt-5 grid grid-cols-4 gap-2">
-            @for (image of item.images; track image.url) {
-              <img [src]="image.url" alt="" class="aspect-square rounded-md object-cover" loading="lazy">
-            }
-          </div>
-          <div class="mt-8">
-            <p class="font-bold text-forest">{{ item.tenant?.name }}</p>
-            <h1 class="text-4xl font-black">{{ item.year }} {{ item.make }} {{ item.model }} {{ item.trim }}</h1>
-            <p class="mt-2 text-3xl font-black text-forest">{{ item.priceLak | lak }}</p>
-            <dl class="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-              <div class="rounded-md bg-white p-4"><dt class="text-xs text-black/50">Mileage</dt><dd class="font-bold">{{ item.mileageKm || 0 | number }} km</dd></div>
-              <div class="rounded-md bg-white p-4"><dt class="text-xs text-black/50">Fuel</dt><dd class="font-bold">{{ item.fuelType || 'Petrol' }}</dd></div>
-              <div class="rounded-md bg-white p-4"><dt class="text-xs text-black/50">Transmission</dt><dd class="font-bold">{{ item.transmission || 'Auto' }}</dd></div>
-              <div class="rounded-md bg-white p-4"><dt class="text-xs text-black/50">Location</dt><dd class="font-bold">{{ item.location || 'Laos' }}</dd></div>
-            </dl>
-            <p class="mt-6 whitespace-pre-line text-black/70">{{ item.description }}</p>
-          </div>
-        </section>
+      <main class="la-page-offset bg-white">
+        <div class="la-container py-6">
+          <a routerLink="/cars" class="inline-flex items-center gap-2 py-3 font-bold text-gray-500 hover:text-[var(--accent)]">← Back to listings</a>
 
-        <aside class="h-fit rounded-lg border border-black/10 bg-white p-5 shadow-sm lg:sticky lg:top-20">
-          <h2 class="text-xl font-black">Contact dealer</h2>
-          <p class="text-sm text-black/60">Fast response through phone, WhatsApp, or booking request.</p>
-          <div class="mt-4 grid grid-cols-2 gap-2">
-            <a [href]="'tel:' + item.tenant?.phone" class="focus-ring inline-flex items-center justify-center gap-2 rounded-md border border-black/10 py-3 font-bold"><i-lucide name="phone" class="h-4 w-4" /> Call</a>
-            <a [href]="whatsapp(item)" class="focus-ring inline-flex items-center justify-center gap-2 rounded-md bg-forest py-3 font-bold text-white"><i-lucide name="message-circle" class="h-4 w-4" /> Chat</a>
-          </div>
-          <form (ngSubmit)="book(item)" class="mt-5 space-y-3">
-            <input [(ngModel)]="form.name" name="name" required class="w-full rounded-md border border-black/10 px-3 py-3" placeholder="Your name">
-            <input [(ngModel)]="form.phone" name="phone" required class="w-full rounded-md border border-black/10 px-3 py-3" placeholder="Phone number">
-            <input [(ngModel)]="form.preferredAt" name="preferredAt" type="datetime-local" required class="w-full rounded-md border border-black/10 px-3 py-3">
-            <button class="focus-ring inline-flex w-full items-center justify-center gap-2 rounded-md bg-clay py-3 font-black text-white"><i-lucide name="calendar-check" class="h-5 w-5" /> Book Test Drive</button>
-          </form>
-        </aside>
+          <section class="overflow-hidden rounded-[var(--radius-lg)] bg-[var(--gray-900)]">
+            <div class="gallery-main h-[360px] md:h-[520px]">
+              <img [src]="heroImage(item)" [alt]="item.make + ' ' + item.model">
+            </div>
+            <div class="flex gap-2 overflow-x-auto p-3">
+              @for (image of gallery(item); track image.url) {
+                <img [src]="image.url" alt="" class="h-16 w-24 shrink-0 rounded-md object-cover ring-2 ring-[var(--accent)]">
+              }
+            </div>
+          </section>
+
+          <section class="detail-content mt-8">
+            <div>
+              <p class="font-black text-[var(--accent)]">{{ item.tenant?.name || 'LAOS AUTO' }}</p>
+              <h1 class="mt-1 text-4xl font-black text-gray-950">{{ item.year }} {{ item.make }} {{ item.model }}</h1>
+              <p class="mt-1 text-gray-500">{{ item.trim }}</p>
+
+              <div class="my-6 rounded-2xl bg-[var(--gray-100)] p-6">
+                <span class="text-4xl font-black text-[var(--accent)]">{{ item.priceLak | lak }}</span>
+                <p class="mt-1 text-sm text-gray-500">Estimated installment: {{ monthly(item) | lak }}/month</p>
+              </div>
+
+              <div class="grid grid-cols-2 gap-4 md:grid-cols-3">
+                <div class="rounded-xl bg-[var(--gray-100)] p-4 text-center"><div class="text-2xl">⛽</div><b>{{ item.fuelType || 'Petrol' }}</b><p class="text-xs text-gray-500">Fuel</p></div>
+                <div class="rounded-xl bg-[var(--gray-100)] p-4 text-center"><div class="text-2xl">⚙</div><b>{{ item.transmission || 'Auto' }}</b><p class="text-xs text-gray-500">Transmission</p></div>
+                <div class="rounded-xl bg-[var(--gray-100)] p-4 text-center"><div class="text-2xl">📅</div><b>{{ item.year }}</b><p class="text-xs text-gray-500">Year</p></div>
+                <div class="rounded-xl bg-[var(--gray-100)] p-4 text-center"><div class="text-2xl">🚗</div><b>{{ item.mileageKm || 0 | number }} km</b><p class="text-xs text-gray-500">Mileage</p></div>
+                <div class="rounded-xl bg-[var(--gray-100)] p-4 text-center"><div class="text-2xl">📍</div><b>{{ item.location || 'Laos' }}</b><p class="text-xs text-gray-500">Location</p></div>
+                <div class="rounded-xl bg-[var(--gray-100)] p-4 text-center"><div class="text-2xl">🏷</div><b>{{ item.bodyType || 'Car' }}</b><p class="text-xs text-gray-500">Type</p></div>
+              </div>
+
+              <div class="mt-8">
+                <h2 class="text-xl font-black">Features</h2>
+                <div class="mt-4 grid gap-2 sm:grid-cols-2">
+                  @for (feature of features; track feature) {
+                    <div class="font-bold text-gray-600"><span class="text-[var(--success)]">✓</span> {{ feature }}</div>
+                  }
+                </div>
+              </div>
+
+              <p class="mt-8 leading-8 text-gray-600">{{ item.description }}</p>
+            </div>
+
+            <aside>
+              <div class="sidebar-card sticky top-28">
+                <h2 class="text-xl font-black">📞 Contact dealer</h2>
+                <p class="mt-1 text-sm text-gray-500">Fast response through phone, WhatsApp, Messenger, or booking request.</p>
+                <div class="mt-5 grid gap-3">
+                  <a [href]="whatsapp(item)" class="btn btn-whatsapp w-full">💬 WhatsApp</a>
+                  <a href="https://m.me/laosauto" class="btn w-full bg-[#0084ff] text-white">📘 Messenger</a>
+                  <a [href]="'tel:' + (item.tenant?.phone || '+8562012345678')" class="btn btn-dark w-full">📞 Call Now</a>
+                </div>
+
+                <form (ngSubmit)="book(item)" class="mt-6 grid gap-3">
+                  <h3 class="font-black">🚗 Book Test Drive</h3>
+                  <input [(ngModel)]="form.name" name="name" required class="form-input" placeholder="Your name">
+                  <input [(ngModel)]="form.phone" name="phone" required class="form-input" placeholder="Phone number">
+                  <input [(ngModel)]="form.preferredAt" name="preferredAt" type="datetime-local" required class="form-input">
+                  <button class="btn btn-primary w-full">Confirm Booking</button>
+                  @if (message()) {
+                    <p class="rounded-lg bg-green-50 p-3 text-sm font-bold text-green-700">{{ message() }}</p>
+                  }
+                </form>
+              </div>
+            </aside>
+          </section>
+        </div>
       </main>
     }
   `
 })
 export class CarDetailPageComponent implements OnInit {
   car = signal<Car | undefined>(undefined);
+  message = signal('');
   form = { name: '', phone: '', preferredAt: '' };
+  features = ['Leather Seats', 'Navigation', 'Backup Camera', 'Apple CarPlay', 'Blind Spot Monitor', 'Warranty Included', 'Finance Available', 'Verified Documents'];
 
   constructor(private readonly route: ActivatedRoute, private readonly api: ApiService) {}
 
   ngOnInit() {
-    this.api.car(this.route.snapshot.paramMap.get('id')!).subscribe((car) => this.car.set(car));
+    const id = this.route.snapshot.paramMap.get('id')!;
+    const demo = publicDemoCars.find((car) => car.id === id);
+    if (demo) {
+      this.car.set(demo);
+      return;
+    }
+    this.api
+      .car(id)
+      .pipe(catchError(() => of(publicDemoCars[0])))
+      .subscribe((car) => this.car.set(car));
   }
 
   heroImage(car: Car) {
-    return car.images?.[0]?.url || 'https://images.unsplash.com/photo-1542362567-b07e54358753?auto=format&fit=crop&w=1200&q=75';
+    return car.images?.find((image) => image.isPrimary)?.url || car.images?.[0]?.url || publicDemoCars[0].images[0].url;
+  }
+
+  gallery(car: Car) {
+    return car.images?.length ? car.images : publicDemoCars[0].images;
+  }
+
+  monthly(car: Car) {
+    return Math.round(Number(car.priceLak) * 0.7 / 60);
   }
 
   whatsapp(car: Car) {
-    const phone = car.tenant?.whatsapp || car.tenant?.phone || '';
-    return `https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(`I'm interested in ${car.year} ${car.make} ${car.model}`)}`;
+    const phone = car.tenant?.whatsapp || car.tenant?.phone || '+8562012345678';
+    return `https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi, I am interested in ${car.year} ${car.make} ${car.model}`)}`;
   }
 
   book(car: Car) {
-    this.api.createBooking({ tenantId: car.tenantId, carId: car.id, ...this.form, preferredAt: new Date(this.form.preferredAt).toISOString() }).subscribe();
+    if (car.id.startsWith('demo-')) {
+      this.message.set('Booking captured. Dealer will contact you soon.');
+      return;
+    }
+    this.api.createBooking({ tenantId: car.tenantId, carId: car.id, ...this.form, preferredAt: new Date(this.form.preferredAt).toISOString() }).subscribe(() => this.message.set('Booking captured. Dealer will contact you soon.'));
   }
 }
+
