@@ -11,6 +11,7 @@ import { SuperAdminDashboardComponent } from './features/admin/super-admin-dashb
 
 export const routes: Routes = [
   { path: '', component: HomePageComponent, title: 'Lao Auto - Cars in Laos' },
+  { path: 'login', loadComponent: () => import('./features/public/login-page.component').then(m => m.LoginPageComponent), title: 'Login' },
   { path: 'cars', component: CarListPageComponent, title: 'Browse cars' },
   { path: 'cars/:id', component: CarDetailPageComponent, title: 'Car details' },
   { path: 'contact', component: ContactPageComponent, title: 'Contact LAOS AUTO' },
