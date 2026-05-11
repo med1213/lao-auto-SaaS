@@ -3,13 +3,19 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, Repository } from 'typeorm';
 import { CarStatus, UserRole } from '../common/enums';
 import { JwtUser } from '../common/jwt-user.type';
+import { CarImage } from './car-image.entity';
+import { Car } from './car.entity';
+import { Tenant } from '../tenants/tenant.entity';
 import { CarQueryDto } from './dto/car-query.dto';
 import { CreateCarDto } from './dto/create-car.dto';
-import { Car } from './car.entity';
 
 @Injectable()
 export class CarsService {
-  constructor(@InjectRepository(Car) private readonly cars: Repository<Car>) {}
+  constructor(
+    @InjectRepository(Car) private readonly cars: Repository<Car>,
+    @InjectRepository(CarImage) private readonly carImages: Repository<CarImage>,
+    @InjectRepository(Tenant) private readonly tenants: Repository<Tenant>
+  ) {}
 
   async publicSearch(query: CarQueryDto) {
     const qb = this.cars
@@ -51,20 +57,31 @@ export class CarsService {
     return car;
   }
 
-  dealerCars(user: JwtUser) {
-    if (!user.tenantId) throw new ForbiddenException('Tenant required');
+  async dealerCars(user: JwtUser) {
+    let tenantId = user.tenantId;
+    if (user.role === UserRole.SuperAdmin && !tenantId) {
+      const firstTenant = await this.tenants.findOne({ where: {} });
+      if (firstTenant) tenantId = firstTenant.id;
+    }
+    if (!tenantId) throw new ForbiddenException('Tenant required');
     return this.cars.find({
-      where: { tenantId: user.tenantId },
+      where: { tenantId },
       relations: { images: true },
       order: { createdAt: 'DESC' }
     });
   }
 
-  create(dto: CreateCarDto, user: JwtUser) {
-    if (!user.tenantId) throw new ForbiddenException('Tenant required');
+  async create(dto: CreateCarDto, user: JwtUser) {
+    let tenantId = user.role === UserRole.SuperAdmin && dto.tenantId ? dto.tenantId : user.tenantId;
+    if (user.role === UserRole.SuperAdmin && !tenantId) {
+      const firstTenant = await this.tenants.findOne({ where: {} });
+      if (firstTenant) tenantId = firstTenant.id;
+    }
+    if (!tenantId) throw new ForbiddenException('Tenant required');
+
     const car = this.cars.create({
       ...dto,
-      tenantId: user.tenantId,
+      tenantId,
       status: user.role === UserRole.SuperAdmin ? CarStatus.Published : CarStatus.Pending,
       images: dto.images?.map((image, sortOrder) => ({ ...image, sortOrder }))
     });
@@ -94,5 +111,31 @@ export class CarsService {
   approve(id: string, status: CarStatus) {
     return this.cars.update(id, { status });
   }
-}
 
+  /** Add an uploaded file as a CarImage record linked to the given car */
+  async addImage(carId: string, filename: string, user: JwtUser): Promise<CarImage> {
+    const car = await this.cars.findOne({ where: { id: carId }, relations: { images: true } });
+    if (!car) throw new NotFoundException('Car not found');
+    if (user.role !== UserRole.SuperAdmin && car.tenantId !== user.tenantId) {
+      throw new ForbiddenException('Wrong tenant');
+    }
+
+    const isPrimary = car.images.length === 0;
+    const sortOrder = car.images.length;
+    const url = `/uploads/cars/${filename}`;
+
+    const image = this.carImages.create({ carId, url, isPrimary, sortOrder });
+    return this.carImages.save(image);
+  }
+
+  /** Delete a specific image from a car */
+  async removeImage(carId: string, imageId: string, user: JwtUser) {
+    const car = await this.cars.findOneBy({ id: carId });
+    if (!car) throw new NotFoundException('Car not found');
+    if (user.role !== UserRole.SuperAdmin && car.tenantId !== user.tenantId) {
+      throw new ForbiddenException('Wrong tenant');
+    }
+    await this.carImages.delete({ id: imageId, carId });
+    return { deleted: true };
+  }
+}

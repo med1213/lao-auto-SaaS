@@ -25,5 +25,19 @@ export class TenantsService {
   create(dto: CreateTenantDto) {
     return this.tenants.save(this.tenants.create(dto));
   }
+
+  async update(id: string, dto: Partial<CreateTenantDto>) {
+    const tenant = await this.tenants.findOneBy({ id });
+    if (!tenant) throw new NotFoundException('Dealer not found');
+    Object.assign(tenant, dto);
+    return this.tenants.save(tenant);
+  }
+
+  async remove(id: string) {
+    const tenant = await this.tenants.findOneBy({ id });
+    if (!tenant) throw new NotFoundException('Dealer not found');
+    await this.tenants.delete(id);
+    return { deleted: true };
+  }
 }
 

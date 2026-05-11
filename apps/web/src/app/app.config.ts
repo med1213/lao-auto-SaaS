@@ -13,7 +13,12 @@ import {
   Search,
   SlidersHorizontal,
   Star,
-  UserRound
+  UserRound,
+  Mail,
+  Lock,
+  LogIn,
+  CarFront,
+  Loader2
 } from 'lucide-angular';
 import { routes } from './app.routes';
 import { authInterceptor } from './core/auth.interceptor';
@@ -34,7 +39,12 @@ export const appConfig: ApplicationConfig = {
         Search,
         SlidersHorizontal,
         Star,
-        UserRound
+        UserRound,
+        Mail,
+        Lock,
+        LogIn,
+        CarFront,
+        Loader2
       })
     )
   ]

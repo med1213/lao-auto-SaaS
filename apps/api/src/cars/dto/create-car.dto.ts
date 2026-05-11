@@ -64,5 +64,9 @@ export class CreateCarDto {
   @ValidateNested({ each: true })
   @Type(() => CarImageDto)
   images?: CarImageDto[];
+
+  @IsOptional()
+  @IsString()
+  tenantId?: string;
 }
 

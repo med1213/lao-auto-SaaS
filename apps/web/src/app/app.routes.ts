@@ -17,8 +17,8 @@ export const routes: Routes = [
   { path: 'contact', component: ContactPageComponent, title: 'Contact LAOS AUTO' },
   { path: 'compare', component: ComparePageComponent, title: 'Compare cars' },
   { path: 'dealers/:slug', component: DealerProfilePageComponent, title: 'Dealer profile' },
-  { path: 'cpanel/dealer', component: DealerDashboardComponent, title: 'Dealer Cpanel' },
-  { path: 'cpanel/admin', component: SuperAdminDashboardComponent, title: 'Admin Cpanel' },
+  { path: 'cpanel/dealer', component: DealerDashboardComponent, canActivate: [authGuard], title: 'Dealer Cpanel' },
+  { path: 'cpanel/admin', component: SuperAdminDashboardComponent, canActivate: [authGuard], title: 'Admin Cpanel' },
   { path: 'dashboard', component: DealerDashboardComponent, canActivate: [authGuard], title: 'Dealer dashboard' },
   { path: 'admin', component: SuperAdminDashboardComponent, canActivate: [authGuard], title: 'Platform admin' },
   { path: '**', redirectTo: '' }

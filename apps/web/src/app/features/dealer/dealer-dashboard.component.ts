@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, computed, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { catchError, forkJoin, of } from 'rxjs';
 import { ApiService } from '../../core/api.service';
 import { Car } from '../../core/models';
@@ -28,7 +28,7 @@ type BookingRow = {
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, LakCurrencyPipe],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, LakCurrencyPipe],
   template: `
     <main class="min-h-screen bg-[#eef1f5] pt-[72px]">
       <div class="grid min-h-[calc(100vh-72px)] lg:grid-cols-[280px_1fr]">
@@ -60,7 +60,7 @@ type BookingRow = {
               </div>
               <div class="flex flex-wrap gap-2">
                 <button class="btn btn-dark !min-h-10 !px-4" (click)="activeTab.set('inventory')">Manage Cars</button>
-                <button class="btn btn-primary !min-h-10 !px-4" (click)="showAddCar.set(true)">+ Add Car</button>
+                <button class="btn btn-primary !min-h-10 !px-4" (click)="openCreateModal()">+ Add Car</button>
               </div>
             </div>
           </header>
@@ -134,7 +134,7 @@ type BookingRow = {
                           <td class="p-4"><span class="rounded-full px-3 py-1 text-xs font-black" [class.bg-green-50]="car.isFeatured" [class.text-green-700]="car.isFeatured" [class.bg-gray-100]="!car.isFeatured">{{ car.isFeatured ? 'Featured' : 'Published' }}</span></td>
                           <td class="p-4">{{ car.viewCount }}</td>
                           <td class="p-4">{{ car.clickCount }}</td>
-                          <td class="p-4"><button class="rounded-lg bg-gray-100 px-3 py-2 font-bold">Edit</button><button class="ml-2 rounded-lg bg-yellow-100 px-3 py-2 font-bold text-yellow-800">Boost</button></td>
+                          <td class="p-4"><button class="rounded-lg bg-gray-100 px-3 py-2 font-bold hover:bg-gray-200" (click)="openEditModal(car)">Edit</button><button class="ml-2 rounded-lg bg-red-100 px-3 py-2 font-bold text-red-800 hover:bg-red-200" (click)="deleteCar(car.id)">Delete</button></td>
                         </tr>
                       }
                     </tbody>
@@ -197,19 +197,26 @@ type BookingRow = {
         </section>
       </div>
 
-      @if (showAddCar()) {
+      @if (isCarModalOpen()) {
         <div class="fixed inset-0 z-[2000] grid place-items-center bg-black/60 p-4">
           <div class="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl">
-            <div class="flex items-center justify-between"><h3 class="text-2xl font-black">Add New Car</h3><button class="text-2xl" (click)="showAddCar.set(false)">×</button></div>
-            <div class="mt-5 grid gap-3 md:grid-cols-2">
-              <input class="form-input" placeholder="Make">
-              <input class="form-input" placeholder="Model">
-              <input class="form-input" placeholder="Year">
-              <input class="form-input" placeholder="Price LAK">
-              <input class="form-input md:col-span-2" placeholder="Image URL">
-              <textarea class="form-input md:col-span-2 min-h-28" placeholder="Description"></textarea>
+            <div class="flex items-center justify-between">
+              <h3 class="text-2xl font-black">{{ editingCarId() ? 'Edit Car' : 'Add New Car' }}</h3>
+              <button class="text-2xl" (click)="isCarModalOpen.set(false)">×</button>
             </div>
-            <div class="mt-5 flex justify-end gap-2"><button class="btn btn-dark" (click)="showAddCar.set(false)">Cancel</button><button class="btn btn-primary" (click)="showAddCar.set(false)">Save Draft</button></div>
+            <form [formGroup]="carForm" (ngSubmit)="saveCar()" class="mt-5 grid gap-3 md:grid-cols-2">
+              <input formControlName="make" class="form-input" placeholder="Make (e.g. Toyota)">
+              <input formControlName="model" class="form-input" placeholder="Model (e.g. Fortuner)">
+              <input formControlName="trim" class="form-input md:col-span-2" placeholder="Trim (e.g. 2.4 Legender)">
+              <input formControlName="year" type="number" class="form-input" placeholder="Year">
+              <input formControlName="priceLak" class="form-input" placeholder="Price LAK">
+              <input formControlName="imageUrl" class="form-input md:col-span-2" placeholder="Image URL">
+              <textarea formControlName="description" class="form-input md:col-span-2 min-h-28" placeholder="Description"></textarea>
+              <div class="md:col-span-2 mt-2 flex justify-end gap-2">
+                <button type="button" class="btn btn-dark" (click)="isCarModalOpen.set(false)">Cancel</button>
+                <button type="submit" [disabled]="carForm.invalid" class="btn btn-primary disabled:opacity-50">Save Car</button>
+              </div>
+            </form>
           </div>
         </div>
       }
@@ -218,7 +225,9 @@ type BookingRow = {
 })
 export class DealerDashboardComponent implements OnInit {
   activeTab = signal('overview');
-  showAddCar = signal(false);
+  isCarModalOpen = signal(false);
+  editingCarId = signal<string | null>(null);
+  carForm: FormGroup;
   cars = signal<Car[]>(publicDemoCars);
   leads = signal<unknown[]>([]);
   bookings = signal<unknown[]>([]);
@@ -273,15 +282,80 @@ export class DealerDashboardComponent implements OnInit {
     ];
   });
 
-  constructor(private readonly api: ApiService) {}
+  constructor(private readonly api: ApiService, private readonly fb: FormBuilder) {
+    this.carForm = this.fb.group({
+      make: ['', Validators.required],
+      model: ['', Validators.required],
+      trim: ['', Validators.required],
+      year: [new Date().getFullYear(), [Validators.required, Validators.min(1900)]],
+      priceLak: ['', Validators.required],
+      imageUrl: ['', Validators.required],
+      description: ['']
+    });
+  }
+
+  openCreateModal() {
+    this.editingCarId.set(null);
+    this.carForm.reset({ year: new Date().getFullYear() });
+    this.isCarModalOpen.set(true);
+  }
+
+  openEditModal(car: Car) {
+    this.editingCarId.set(car.id);
+    this.carForm.patchValue({
+      make: car.make,
+      model: car.model,
+      trim: car.trim,
+      year: car.year,
+      priceLak: car.priceLak,
+      imageUrl: car.images && car.images.length > 0 ? car.images[0].url : '',
+      description: car.description
+    });
+    this.isCarModalOpen.set(true);
+  }
+
+  saveCar() {
+    if (this.carForm.invalid) return;
+    const formValue = this.carForm.value;
+    const dto = {
+      ...formValue,
+      images: [{ url: formValue.imageUrl, isPrimary: true }]
+    };
+    
+    const id = this.editingCarId();
+    const request = id ? this.api.updateCar(id, dto) : this.api.createCar(dto);
+    
+    request.subscribe({
+      next: () => {
+        this.isCarModalOpen.set(false);
+        this.loadCars();
+      },
+      error: (err) => console.error('Save failed', err)
+    });
+  }
+
+  deleteCar(id: string) {
+    if (!confirm('Are you sure you want to delete this car?')) return;
+    this.api.deleteCar(id).subscribe({
+      next: () => {
+        this.cars.set(this.cars().filter(c => c.id !== id));
+      },
+      error: (err) => console.error('Delete failed', err)
+    });
+  }
+
+  loadCars() {
+    this.api.dealerCars().pipe(catchError(() => of([] as Car[]))).subscribe(cars => {
+      if (cars.length) this.cars.set(cars);
+    });
+  }
 
   ngOnInit() {
+    this.loadCars();
     forkJoin({
-      cars: this.api.dealerCars().pipe(catchError(() => of([] as Car[]))),
       leads: this.api.dealerLeads().pipe(catchError(() => of([]))),
       bookings: this.api.dealerBookings().pipe(catchError(() => of([])))
-    }).subscribe(({ cars, leads, bookings }) => {
-      if (cars.length) this.cars.set(cars);
+    }).subscribe(({ leads, bookings }) => {
       this.leads.set(leads);
       this.bookings.set(bookings);
     });

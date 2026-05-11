@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, computed, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { catchError, forkJoin, of } from 'rxjs';
 import { ApiService } from '../../core/api.service';
 import { Car, Tenant } from '../../core/models';
@@ -9,7 +9,7 @@ import { LakCurrencyPipe } from '../../shared/currency.pipe';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, LakCurrencyPipe],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, LakCurrencyPipe],
   template: `
     <main class="min-h-screen bg-[#eef1f5] pt-[72px]">
       <div class="grid min-h-[calc(100vh-72px)] xl:grid-cols-[290px_1fr]">
@@ -41,7 +41,7 @@ import { LakCurrencyPipe } from '../../shared/currency.pipe';
               </div>
               <div class="flex flex-wrap gap-2">
                 <button class="btn btn-dark !min-h-10 !px-4" (click)="activeTab.set('moderation')">Review Listings</button>
-                <button class="btn btn-primary !min-h-10 !px-4" (click)="showTenantModal.set(true)">+ Add Tenant</button>
+                <button class="btn btn-primary !min-h-10 !px-4" (click)="openTenantModal()">+ Add Tenant</button>
               </div>
             </div>
           </header>
@@ -109,7 +109,7 @@ import { LakCurrencyPipe } from '../../shared/currency.pipe';
                           <td class="p-4">{{ tenant.listings }}</td>
                           <td class="p-4">{{ tenant.leads }}</td>
                           <td class="p-4"><span class="rounded-full bg-green-50 px-3 py-1 text-xs font-black text-green-700">Active</span></td>
-                          <td class="p-4"><button class="rounded-lg bg-gray-100 px-3 py-2 font-bold">Open</button><button class="ml-2 rounded-lg bg-black px-3 py-2 font-bold text-white">Billing</button></td>
+                          <td class="p-4"><button class="rounded-lg bg-gray-100 px-3 py-2 font-bold hover:bg-gray-200" (click)="openEditTenantModal(tenant)">Edit</button><button class="ml-2 rounded-lg bg-red-100 px-3 py-2 font-bold text-red-800 hover:bg-red-200" (click)="deleteTenant(tenant.id)">Delete</button></td>
                         </tr>
                       }
                     </tbody>
@@ -128,7 +128,11 @@ import { LakCurrencyPipe } from '../../shared/currency.pipe';
                       <div class="p-4">
                         <div class="flex justify-between gap-3"><div><h4 class="font-black">{{ car.year }} {{ car.make }} {{ car.model }}</h4><p class="text-sm text-gray-500">{{ car.tenant?.name || 'Dealer' }}</p></div><span class="h-fit rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">Pending</span></div>
                         <p class="mt-3 font-black text-[var(--accent)]">{{ car.priceLak | lak }}</p>
-                        <div class="mt-4 grid grid-cols-3 gap-2"><button class="rounded-lg bg-green-600 px-3 py-2 font-bold text-white">Approve</button><button class="rounded-lg bg-yellow-100 px-3 py-2 font-bold text-yellow-800">Feature</button><button class="rounded-lg bg-red-50 px-3 py-2 font-bold text-red-700">Reject</button></div>
+                        <div class="mt-4 flex flex-wrap gap-2">
+                          <button class="rounded-lg bg-green-600 px-3 py-2 font-bold text-white">Approve</button>
+                          <button class="rounded-lg bg-yellow-100 px-3 py-2 font-bold text-yellow-800">Feature</button>
+                          <button class="rounded-lg bg-red-50 px-3 py-2 font-bold text-red-700" (click)="deleteCar(car.id)">Delete</button>
+                        </div>
                       </div>
                     </div>
                   }
@@ -185,17 +189,23 @@ import { LakCurrencyPipe } from '../../shared/currency.pipe';
         </section>
       </div>
 
-      @if (showTenantModal()) {
+      @if (isTenantModalOpen()) {
         <div class="fixed inset-0 z-[2000] grid place-items-center bg-black/60 p-4">
           <div class="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl">
-            <div class="flex items-center justify-between"><h3 class="text-2xl font-black">Add Tenant</h3><button class="text-2xl" (click)="showTenantModal.set(false)">×</button></div>
-            <div class="mt-5 grid gap-3">
-              <input class="form-input" placeholder="Dealer name">
-              <input class="form-input" placeholder="dealer-slug">
-              <input class="form-input" placeholder="Phone">
-              <select class="form-input"><option>Free</option><option>Pro</option><option>Premium</option></select>
+            <div class="flex items-center justify-between">
+              <h3 class="text-2xl font-black">{{ editingTenantId() ? 'Edit Tenant' : 'Add Tenant' }}</h3>
+              <button class="text-2xl" (click)="isTenantModalOpen.set(false)">×</button>
             </div>
-            <div class="mt-5 flex justify-end gap-2"><button class="btn btn-dark" (click)="showTenantModal.set(false)">Cancel</button><button class="btn btn-primary" (click)="showTenantModal.set(false)">Create Tenant</button></div>
+            <form [formGroup]="tenantForm" (ngSubmit)="saveTenant()" class="mt-5 grid gap-3">
+              <input formControlName="name" class="form-input" placeholder="Dealer name">
+              <input formControlName="slug" class="form-input" placeholder="dealer-slug">
+              <input formControlName="phone" class="form-input" placeholder="Phone">
+              <input formControlName="address" class="form-input" placeholder="Address">
+              <div class="mt-2 flex justify-end gap-2">
+                <button type="button" class="btn btn-dark" (click)="isTenantModalOpen.set(false)">Cancel</button>
+                <button type="submit" [disabled]="tenantForm.invalid" class="btn btn-primary disabled:opacity-50">Save Tenant</button>
+              </div>
+            </form>
           </div>
         </div>
       }
@@ -204,7 +214,9 @@ import { LakCurrencyPipe } from '../../shared/currency.pipe';
 })
 export class SuperAdminDashboardComponent implements OnInit {
   activeTab = signal('overview');
-  showTenantModal = signal(false);
+  isTenantModalOpen = signal(false);
+  editingTenantId = signal<string | null>(null);
+  tenantForm: FormGroup;
   tenantSearch = '';
   cars = signal<Car[]>(publicDemoCars);
   tenants = signal<Tenant[]>([]);
@@ -249,14 +261,78 @@ export class SuperAdminDashboardComponent implements OnInit {
     { label: 'Conversion', value: '7.8%', icon: '📈', note: 'Strong lead flow' }
   ]);
 
-  constructor(private readonly api: ApiService) {}
+  constructor(private readonly api: ApiService, private readonly fb: FormBuilder) {
+    this.tenantForm = this.fb.group({
+      name: ['', Validators.required],
+      slug: ['', Validators.required],
+      phone: [''],
+      address: ['']
+    });
+  }
+
+  openTenantModal() {
+    this.editingTenantId.set(null);
+    this.tenantForm.reset();
+    this.isTenantModalOpen.set(true);
+  }
+
+  openEditTenantModal(tenant: Tenant) {
+    this.editingTenantId.set(tenant.id);
+    this.tenantForm.patchValue({
+      name: tenant.name,
+      slug: tenant.slug,
+      phone: tenant.phone,
+      address: tenant.address
+    });
+    this.isTenantModalOpen.set(true);
+  }
+
+  saveTenant() {
+    if (this.tenantForm.invalid) return;
+    const dto = this.tenantForm.value;
+    const id = this.editingTenantId();
+    const request = id ? this.api.updateDealer(id, dto) : this.api.createDealer(dto);
+    
+    request.subscribe({
+      next: () => {
+        this.isTenantModalOpen.set(false);
+        this.loadDealers();
+      },
+      error: (err) => console.error('Failed to save tenant', err)
+    });
+  }
+
+  deleteTenant(id: string) {
+    if (!confirm('Are you sure you want to delete this dealer? All their cars and users will be deleted.')) return;
+    this.api.deleteDealer(id).subscribe({
+      next: () => {
+        this.tenants.set(this.tenants().filter(t => t.id !== id));
+      },
+      error: (err) => console.error('Failed to delete tenant', err)
+    });
+  }
+
+  deleteCar(id: string) {
+    if (!confirm('Are you sure you want to completely remove this car from the platform?')) return;
+    this.api.deleteCar(id).subscribe({
+      next: () => {
+        this.cars.set(this.cars().filter(c => c.id !== id));
+      },
+      error: (err) => console.error('Failed to delete car', err)
+    });
+  }
+
+  loadDealers() {
+    this.api.dealers().pipe(catchError(() => of([] as Tenant[]))).subscribe(dealers => {
+      if (dealers.length) this.tenants.set(dealers);
+    });
+  }
 
   ngOnInit() {
+    this.loadDealers();
     forkJoin({
-      dealers: this.api.dealers().pipe(catchError(() => of([] as Tenant[]))),
       cars: this.api.cars({ limit: 48 }).pipe(catchError(() => of({ items: [] as Car[], total: 0, page: 1, limit: 48 })))
-    }).subscribe(({ dealers, cars }) => {
-      if (dealers.length) this.tenants.set(dealers);
+    }).subscribe(({ cars }) => {
       if (cars.items.length) this.cars.set(cars.items);
     });
   }
